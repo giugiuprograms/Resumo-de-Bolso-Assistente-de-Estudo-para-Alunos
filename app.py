@@ -21,7 +21,7 @@ transcription = None
 # OPÇÃO 1: UPLOAD DE ARQUIVO (MP3, MP4, etc)
 # ==========================================
 if opcao == "Upload de Arquivo (Áudio/Vídeo)":
-    # Aumentamos a instrução visual para o usuário
+    # Dica: No Codespaces, teste com arquivos menores que 20MB para evitar o erro 413 do túnel da Microsoft
     uploaded_file = st.file_uploader("Faça o upload da aula (Formatos aceitos: MP3, WAV, M4A, MP4)", type=["mp3", "wav", "m4a", "mp4"])
     
     if uploaded_file is not None:
@@ -49,7 +49,7 @@ if opcao == "Upload de Arquivo (Áudio/Vídeo)":
                         os.remove(tmp_path)
 
 # ==========================================
-# OPÇÃO 2: LINK DO YOUTUBE (Versão Corrigida)
+# OPÇÃO 2: LINK DO YOUTUBE (Versão Blindada)
 # ==========================================
 elif opcao == "Link do YouTube":
     youtube_url = st.text_input("Cole o link do vídeo do YouTube aqui:")
@@ -64,15 +64,13 @@ elif opcao == "Link do YouTube":
                     if video_id_match:
                         video_id = video_id_match.group(1)
                         
-                        # Tenta pegar a legenda direto (pt-BR, pt ou en)
                         try:
-                            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['pt-BR', 'pt', 'en'])
-                        except:
-                            # Se o erro persistir, tenta listar todas as legendas disponíveis e pegar a primeira
-                            # Note que aqui usamos a classe para buscar a lista primeiro
-                            transcript_list_obj = YouTubeTranscriptApi.list_transcripts(video_id)
-                            # Pega a primeira legenda (seja automática ou manual)
-                            transcript_list = list(transcript_list_obj)[0].fetch()
+                            # Tentativa 1: Método Padrão
+                            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['pt-BR', 'pt', 'en', 'es'])
+                        except AttributeError:
+                            # Tentativa 2: Caso a versão do pacote exija instanciar a classe
+                            api_instance = YouTubeTranscriptApi()
+                            transcript_list = api_instance.get_transcript(video_id, languages=['pt-BR', 'pt', 'en', 'es'])
                             
                         transcription = " ".join([t['text'] for t in transcript_list])
                         
@@ -80,10 +78,11 @@ elif opcao == "Link do YouTube":
                         with st.expander("Visualizar Texto das Legendas"):
                             st.write(transcription)
                     else:
-                        st.error("Não foi possível identificar o ID do vídeo.")
+                        st.error("Não foi possível identificar o ID do vídeo na URL.")
                 except Exception as e:
-                    st.error("🚨 Ocorreu um erro ao acessar as legendas.")
+                    st.error("🚨 Ocorreu um erro ao acessar as legendas. O vídeo pode não ter legenda ou a rede bloqueou.")
                     st.code(str(e))
+
 # ==========================================
 # MOTOR DE RESUMO (OLLAMA)
 # ==========================================
@@ -102,13 +101,13 @@ if transcription:
 
         url = "http://localhost:11434/api/generate"
         payload = {
-            "model": "mistral",
+            "model": "llama3.2:1b",
             "prompt": prompt,
             "stream": False
         }
 
         try:
-            response = requests.post(url, json=payload, timeout=120)
+            response = requests.post(url, json=payload, timeout=500)
             response.raise_for_status()
             resumo = response.json().get("response", "")
             
@@ -116,4 +115,4 @@ if transcription:
             st.subheader("📝 Resumo Gerado pela IA")
             st.markdown(resumo)
         except Exception as e:
-            st.error("Erro ao conectar com o Ollama. Verifique se 'ollama serve' está rodando.")
+            st.error("Erro ao conectar com o Ollama. Verifique se 'ollama serve' está rodando no terminal.")
